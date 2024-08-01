@@ -2,22 +2,44 @@ import streamlit as st
 import requests
 import json
 import time
+import re
 
 API_URL = "https://api.together.xyz/v1/chat/completions"
-
-# Usa st.secrets para acceder a la API key
 API_KEY = st.secrets["TOGETHER_API_KEY"]
 
-def generate_article(title):
-    prompt = f"""Genera un artículo académico de más de 3000 palabras sobre el tema: "{title}".
-    El artículo debe incluir:
+def generate_index(title):
+    prompt = f"""Crea un índice detallado para un artículo académico de más de 3000 palabras sobre el tema: "{title}".
+    El índice debe incluir:
     1. Introducción
-    2. Desarrollo del tema (con subtemas)
+    2. Al menos 3 secciones principales con 2-3 subsecciones cada una
     3. Conclusión
-    4. Referencias (cita al menos 5 fuentes académicas)
+    4. Referencias
     
-    Usa un estilo académico y formal. Asegúrate de que el artículo tenga coherencia y esté bien estructurado."""
+    Formato el índice usando Markdown, con enlaces internos a cada sección. Por ejemplo:
 
+    # Índice
+    1. [Introducción](#introduccion)
+    2. [Sección Principal 1](#seccion-1)
+        2.1 [Subsección 1.1](#subseccion-1-1)
+        2.2 [Subsección 1.2](#subseccion-1-2)
+    3. [Sección Principal 2](#seccion-2)
+        ...
+    4. [Conclusión](#conclusion)
+    5. [Referencias](#referencias)
+    """
+
+    return call_api(prompt)
+
+def generate_section(title, section):
+    prompt = f"""Genera el contenido para la sección "{section}" del artículo académico sobre "{title}".
+    Asegúrate de que el contenido sea detallado, bien estructurado y académicamente riguroso.
+    Si es una subsección, relaciona el contenido con la sección principal.
+    Usa un estilo académico y formal. Incluye citas si es apropiado.
+    """
+
+    return call_api(prompt)
+
+def call_api(prompt):
     headers = {
         "Authorization": f"Bearer {API_KEY}",
         "Content-Type": "application/json"
@@ -37,21 +59,37 @@ def generate_article(title):
 
     try:
         response = requests.post(API_URL, headers=headers, json=data, stream=True)
-        response.raise_for_status()  # Raise an exception for bad status codes
+        response.raise_for_status()
         
+        full_content = ""
         for line in response.iter_lines():
             if line:
                 try:
                     chunk = json.loads(line.decode('utf-8').split("data: ", 1)[1])
                     if 'choices' in chunk and len(chunk['choices']) > 0:
                         content = chunk['choices'][0]['delta'].get('content', '')
+                        full_content += content
                         yield content
                 except json.JSONDecodeError as e:
                     print(f"JSON decode error: {e}")
                     print(f"Problematic line: {line}")
-                    continue  # Skip this line and continue with the next one
+                    continue
+        
+        if not full_content:
+            yield "Error: No se generó contenido."
     except requests.exceptions.RequestException as e:
         yield f"Error en la solicitud a la API: {str(e)}"
+
+def parse_index(index_content):
+    lines = index_content.split('\n')
+    sections = []
+    for line in lines:
+        if line.startswith('#'):
+            continue
+        match = re.match(r'\d+\.?\d*\s*\[(.+)\]\(#(.+)\)', line.strip())
+        if match:
+            sections.append((match.group(1), match.group(2)))
+    return sections
 
 def main():
     st.title("Generador de Artículos Académicos")
@@ -60,29 +98,21 @@ def main():
     
     if st.button("Generar Artículo"):
         if title:
-            article_placeholder = st.empty()
-            full_article = ""
+            st.write("Generando índice...")
+            index_content = "".join(list(generate_index(title)))
+            st.markdown(index_content)
             
-            st.write("Generando artículo...")
-            progress_bar = st.progress(0)
+            sections = parse_index(index_content)
             
-            try:
-                for chunk in generate_article(title):
-                    full_article += chunk
-                    article_placeholder.markdown(full_article)
-                    
-                    # Actualizar la barra de progreso (asumiendo que 3000 palabras son aproximadamente 18000 caracteres)
-                    progress = min(len(full_article) / 18000, 1.0)
-                    progress_bar.progress(progress)
-                    
-                    time.sleep(0.05)  # Para evitar sobrecarga de la interfaz
-                
-                if full_article:
-                    st.success("¡Artículo generado con éxito!")
-                else:
-                    st.warning("No se pudo generar el artículo. Por favor, intente de nuevo.")
-            except Exception as e:
-                st.error(f"Ocurrió un error durante la generación del artículo: {str(e)}")
+            full_article = index_content + "\n\n"
+            
+            for section_title, section_id in sections:
+                st.write(f"Generando sección: {section_title}")
+                section_content = "".join(list(generate_section(title, section_title)))
+                full_article += f"\n\n## {section_title}\n\n{section_content}"
+                st.markdown(full_article)
+            
+            st.success("¡Artículo generado con éxito!")
         else:
             st.warning("Por favor, ingrese un título para el artículo.")
 
