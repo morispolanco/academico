@@ -9,7 +9,7 @@ API_URL = "https://api.together.xyz/v1/chat/completions"
 API_KEY = st.secrets["TOGETHER_API_KEY"]
 
 def generate_article(title):
-    prompt = f"""Genera un artículo académico de más 1000 palabras sobre el tema: "{title}".
+    prompt = f"""Genera un artículo académico de más de 3000 palabras sobre el tema: "{title}".
     El artículo debe incluir:
     1. Introducción
     2. Desarrollo del tema (con subtemas)
@@ -31,7 +31,7 @@ def generate_article(title):
         "top_p": 0.7,
         "top_k": 50,
         "repetition_penalty": 1,
-        "stop": [""],
+        "stop": ["<|eot_id|>"],
         "stream": True
     }
 
