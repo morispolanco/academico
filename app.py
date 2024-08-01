@@ -26,7 +26,7 @@ def generate_article(title):
     data = {
         "model": "meta-llama/Meta-Llama-3.1-405B-Instruct-Turbo",
         "messages": [{"role": "user", "content": prompt}],
-        "max_tokens": 9512,
+        "max_tokens": 5512,
         "temperature": 0.7,
         "top_p": 0.7,
         "top_k": 50,
